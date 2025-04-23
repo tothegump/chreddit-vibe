@@ -1,0 +1,208 @@
+/* Sidebar styles for Reddit Tool */
+
+#reddit-sidebar-tool {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 300px;
+  height: 100vh;
+  background-color: #ffffff;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+#reddit-sidebar-tool.collapsed {
+  transform: translateX(290px);
+}
+
+/* Common styles for both sidebar types */
+.sidebar-header {
+  padding: 15px;
+  border-bottom: 1px solid #e1e1e1;
+  background-color: #ff4500; /* Reddit orange */
+  color: white;
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+}
+
+.sidebar-footer {
+  padding: 10px 15px;
+  border-top: 1px solid #e1e1e1;
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+}
+
+.sidebar-close-button {
+  position: absolute;
+  top: 10px;
+  left: -30px;
+  width: 30px;
+  height: 30px;
+  background-color: #ff4500;
+  color: white;
+  border: none;
+  border-radius: 4px 0 0 4px;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Style 1: Listing page style */
+.listing-style {
+  background-color: #f9f9f9;
+}
+
+.listing-style .sidebar-header {
+  background-color: #0079d3; /* Reddit blue */
+}
+
+.listing-style .sidebar-close-button {
+  background-color: #0079d3;
+}
+
+.listing-view h3 {
+  color: #0079d3;
+  margin-top: 0;
+  margin-bottom: 15px;
+}
+
+.tool-section {
+  background-color: white;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.tool-section h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #1a1a1b;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.filter-options {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-options label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.filter-options input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+#sort-options {
+  width: 100%;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #edeff1;
+  background-color: white;
+  font-size: 14px;
+}
+
+/* Style 2: Post detail page style */
+.post-detail-style {
+  background-color: #f8f9fa;
+}
+
+.post-detail-style .sidebar-header {
+  background-color: #ff4500; /* Reddit orange */
+}
+
+.post-detail-view h3 {
+  color: #ff4500;
+  margin-top: 0;
+  margin-bottom: 15px;
+}
+
+/* Post title and content styles */
+.post-title-container,
+.post-content-container {
+  max-height: 300px;
+  overflow-y: auto;
+  background-color: #fafafa;
+  border-radius: 4px;
+  padding: 10px;
+  border: 1px solid #edeff1;
+}
+
+.post-title-container {
+  max-height: 100px;
+}
+
+#post-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 16px;
+  color: #1a1a1b;
+  line-height: 1.4;
+}
+
+#post-content {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1a1a1b;
+  white-space: pre-wrap;
+}
+
+.analytics-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.analytics-item .label {
+  color: #7c7c7c;
+}
+
+.analytics-item .value {
+  font-weight: 500;
+}
+
+.action-button {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  margin-bottom: 8px;
+  background-color: #ff4500;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.action-button:hover {
+  background-color: #e03d00;
+}
+
+.action-button:last-child {
+  margin-bottom: 0;
+}
