@@ -6,11 +6,95 @@
   if (!window.location.hostname.includes('reddit.com')) {
     return;
   }
+  
+  // Default API key and prompt template
+  let openRouterApiKey = '';
+  let promptTemplate = `You are a helpful assistant providing suggestions for a Reddit reply. 
+Original post: {{originalPost}}
+{{#if replyContent}}Reply to: {{replyContent}}{{/if}}
+
+Provide a thoughtful, engaging response that's appropriate for the subreddit. Be concise but comprehensive.`;
+  
+  // Translation prompt template
+  let translationPrompt = `请将以下英文内容翻译成中文，并在翻译后添加一个简短的解释，帮助理解内容的背景和要点：
+
+{{content}}
+
+请按照以下格式回复：
+
+## 中文翻译
+[翻译内容]
+
+## 简要解释
+[解释内容]`;
+  
+  // Load saved API key and prompt template from storage
+  chrome.storage.local.get(['openRouterApiKey', 'promptTemplate'], function(result) {
+    if (result.openRouterApiKey) {
+      openRouterApiKey = result.openRouterApiKey;
+    }
+    if (result.promptTemplate) {
+      promptTemplate = result.promptTemplate;
+    }
+  });
 
   // Function to determine if we're on a post detail page
   function isPostDetailPage() {
     // Check if URL contains /comments/ which indicates a post detail page
     return window.location.pathname.includes('/comments/');
+  }
+  
+  // Function to extract the current subreddit/channel
+  function extractSubreddit() {
+    let subreddit = null;
+    
+    // Try to extract from URL first
+    const urlMatch = window.location.pathname.match(/\/r\/([^/]+)/);
+    if (urlMatch && urlMatch[1]) {
+      subreddit = urlMatch[1];
+    }
+    
+    // If not found in URL, try to find it in the DOM
+    if (!subreddit) {
+      // Try different selectors for subreddit name
+      const subredditSelectors = [
+        'a[href^="/r/"]',
+        'a[data-testid="subreddit-link"]',
+        'a.subreddit',
+        'shreddit-subreddit-header'
+      ];
+      
+      for (const selector of subredditSelectors) {
+        try {
+          const element = document.querySelector(selector);
+          if (element && element.textContent) {
+            // Extract subreddit name from text content or href
+            if (element.href) {
+              const hrefMatch = element.href.match(/\/r\/([^/]+)/);
+              if (hrefMatch && hrefMatch[1]) {
+                subreddit = hrefMatch[1];
+                break;
+              }
+            } else {
+              // Try to extract from text content
+              const textMatch = element.textContent.match(/r\/([^\s]+)/);
+              if (textMatch && textMatch[1]) {
+                subreddit = textMatch[1];
+                break;
+              } else if (element.textContent.trim()) {
+                // Just use the text if it doesn't follow r/ format
+                subreddit = element.textContent.trim();
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error extracting subreddit with selector:', selector, e);
+        }
+      }
+    }
+    
+    return subreddit;
   }
 
   // Function to create and inject the sidebar
@@ -51,11 +135,27 @@
             <div class="post-content-container">
               <p id="post-content">加载中...</p>
             </div>
+            <div class="post-buttons-container">
+              <button class="main-post-suggest-button" id="main-post-suggest-button">获取回复建议</button>
+              <button class="translate-button" id="translate-post-button">翻译并解释</button>
+            </div>
+          </div>
+          <div class="tool-section translation-section" id="translation-section" style="display: none;">
+            <h4>翻译内容</h4>
+            <div class="translation-container">
+              <p id="translation-content">点击上方的「翻译并解释」按钮</p>
+            </div>
           </div>
           <div class="tool-section">
             <h4>评论内容</h4>
             <div class="comment-content-container">
               <p id="comment-content">点击评论上的「zjm」按钮查看内容</p>
+            </div>
+          </div>
+          <div class="tool-section comment-translation-section" id="comment-translation-section" style="display: none;">
+            <h4>评论翻译</h4>
+            <div class="comment-translation-container">
+              <p id="comment-translation-content">点击评论上的「zjm」按钮查看翻译</p>
             </div>
           </div>
           <div class="tool-section">
@@ -70,9 +170,27 @@
             </div>
           </div>
           <div class="tool-section">
-            <h4>Quick Actions</h4>
-            <button class="action-button">Save Post</button>
-            <button class="action-button">Share Post</button>
+            <h4>Subreddit</h4>
+            <div class="analytics-item">
+              <span class="label">Channel:</span>
+              <span class="value" id="subreddit-name">Loading...</span>
+            </div>
+          </div>
+          <div class="tool-section">
+            <h4>API Settings</h4>
+            <div class="settings-item">
+              <label for="openrouter-api-key">OpenRouter API Key:</label>
+              <input type="password" id="openrouter-api-key" placeholder="Enter your API key">
+            </div>
+            <button class="action-button" id="save-api-key">Save API Key</button>
+          </div>
+          <div class="tool-section">
+            <h4>Prompt Template</h4>
+            <textarea id="prompt-template" rows="6" placeholder="Enter your prompt template"></textarea>
+            <button class="action-button" id="save-prompt-template">Save Template</button>
+            <div class="template-help">
+              <p>Available variables: {{originalPost}}, {{replyContent}}, {{subreddit}}</p>
+            </div>
           </div>
         </div>
       `;
@@ -246,6 +364,7 @@
     // Update the sidebar with post title and content
     const postTitleElement = document.getElementById('post-title');
     const postContentElement = document.getElementById('post-content');
+    const mainPostSuggestButton = document.getElementById('main-post-suggest-button');
     
     if (postTitleElement) {
       if (title) {
@@ -261,6 +380,89 @@
       } else {
         postContentElement.textContent = '无法获取内容';
       }
+    }
+    
+    // Add click event listener for main post suggestion button
+    if (mainPostSuggestButton) {
+      mainPostSuggestButton.addEventListener('click', function() {
+        const originalPost = `${title || ''}
+${content || ''}`;
+        const subreddit = extractSubreddit() || '';
+        
+        // Create a container for the suggestion in the sidebar
+        const commentContentElement = document.getElementById('comment-content');
+        if (commentContentElement) {
+          commentContentElement.textContent = '正在生成回复建议...';
+          
+          // Generate reply suggestion for main post
+          generateMainPostReplySuggestion(originalPost, subreddit);
+        }
+      });
+    }
+    
+    // Extract and display subreddit name
+    const subredditElement = document.getElementById('subreddit-name');
+    if (subredditElement) {
+      const subreddit = extractSubreddit();
+      if (subreddit) {
+        subredditElement.textContent = subreddit;
+      } else {
+        subredditElement.textContent = 'Unknown';
+      }
+    }
+    
+    // Load saved API key and prompt template into form fields
+    chrome.storage.local.get(['openRouterApiKey', 'promptTemplate', 'translationPrompt'], function(result) {
+      const apiKeyInput = document.getElementById('openrouter-api-key');
+      const promptTemplateInput = document.getElementById('prompt-template');
+      
+      if (apiKeyInput && result.openRouterApiKey) {
+        apiKeyInput.value = result.openRouterApiKey;
+      }
+      
+      if (promptTemplateInput && result.promptTemplate) {
+        promptTemplateInput.value = result.promptTemplate;
+      } else if (promptTemplateInput) {
+        promptTemplateInput.value = promptTemplate;
+      }
+      
+      // Update translation prompt if saved
+      if (result.translationPrompt) {
+        translationPrompt = result.translationPrompt;
+      }
+    });
+    
+    // Add click event listener for translate button
+    const translateButton = document.getElementById('translate-post-button');
+    if (translateButton) {
+      translateButton.addEventListener('click', function() {
+        // Get post title and content
+        const postTitle = postTitleElement ? postTitleElement.textContent : '';
+        const postContent = postContentElement ? postContentElement.textContent : '';
+        
+        if (!postTitle && !postContent) {
+          alert('无法获取帖子内容进行翻译。');
+          return;
+        }
+        
+        // Combine title and content
+        const fullContent = `${postTitle}\n\n${postContent}`;
+        
+        // Show translation section
+        const translationSection = document.getElementById('translation-section');
+        if (translationSection) {
+          translationSection.style.display = 'block';
+        }
+        
+        // Get translation content element
+        const translationContentElement = document.getElementById('translation-content');
+        if (translationContentElement) {
+          translationContentElement.textContent = '正在翻译并解释...';
+          
+          // Call translation function
+          translateAndExplainContent(fullContent, translationContentElement);
+        }
+      });
     }
     
     // Add zjm buttons to comments after a short delay
@@ -409,14 +611,56 @@
         const commentContentElement = document.getElementById('comment-content');
         if (commentContentElement && commentContent) {
           commentContentElement.textContent = commentContent;
+          
+          // Show comment translation section
+          const commentTranslationSection = document.getElementById('comment-translation-section');
+          if (commentTranslationSection) {
+            commentTranslationSection.style.display = 'block';
+          }
+          
+          // Get comment translation content element
+          const commentTranslationElement = document.getElementById('comment-translation-content');
+          if (commentTranslationElement) {
+            commentTranslationElement.textContent = '正在翻译评论...';
+            
+            // Call translation function
+            translateAndExplainContent(commentContent, commentTranslationElement);
+          }
         }
       });
       
-      // Insert button at the beginning of the target element
+      // Create reply suggestion button
+      const suggestButton = document.createElement('button');
+      suggestButton.className = 'suggest-button';
+      suggestButton.textContent = 'Reply Suggestions';
+      suggestButton.dataset.commentIndex = index;
+      
+      // Add click event listener for reply suggestion
+      suggestButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Get original post content
+        const { title, content } = extractPostContent();
+        const originalPost = `${title}\n${content}`;
+        
+        // Get comment content if replying to a comment
+        const commentContent = extractCommentContent(comment);
+        
+        // Get subreddit
+        const subreddit = extractSubreddit() || '';
+        
+        // Generate reply suggestion
+        generateReplySuggestion(originalPost, commentContent, subreddit, comment);
+      });
+      
+      // Insert buttons
       if (insertTarget.firstChild) {
+        insertTarget.insertBefore(suggestButton, insertTarget.firstChild);
         insertTarget.insertBefore(zjmButton, insertTarget.firstChild);
       } else {
         insertTarget.appendChild(zjmButton);
+        insertTarget.appendChild(suggestButton);
       }
     });
   }
@@ -473,8 +717,401 @@
     return commentContent;
   }
   
+  // Function to translate and explain content
+  function translateAndExplainContent(content, outputElement) {
+    // Check if API key is available
+    chrome.storage.local.get(['openRouterApiKey'], function(result) {
+      const apiKey = result.openRouterApiKey;
+      
+      if (!apiKey) {
+        alert('请在侧边栏设置中输入您的OpenRouter API密钥。');
+        return;
+      }
+      
+      // Replace template variables
+      const processedPrompt = translationPrompt.replace(/{{content}}/g, content || '');
+      
+      // Call OpenRouter API
+      const url = 'https://openrouter.ai/api/v1/chat/completions';
+      const headers = {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      };
+      
+      const payload = {
+        'model': 'anthropic/claude-3-opus:beta',  // Default to Claude 3 Opus
+        'messages': [
+          {'role': 'user', 'content': processedPrompt}
+        ],
+        'stream': true
+      };
+      
+      // Stream the response
+      fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(payload)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        let fullContent = '';
+        
+        function processStream({ done, value }) {
+          if (done) {
+            return;
+          }
+          
+          buffer += decoder.decode(value, { stream: true });
+          
+          // Process complete lines
+          let lines = buffer.split('\n');
+          buffer = lines.pop(); // Keep the last incomplete line in the buffer
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.substring(6);
+              if (data === '[DONE]') {
+                // Stream completed
+                return;
+              }
+              
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices[0].delta.content;
+                if (content) {
+                  fullContent += content;
+                  if (outputElement) {
+                    outputElement.textContent = fullContent;
+                  }
+                }
+              } catch (e) {
+                console.error('Error parsing streaming data:', e);
+              }
+            }
+          }
+          
+          // Continue reading
+          return reader.read().then(processStream);
+        }
+        
+        return reader.read().then(processStream);
+      })
+      .catch(error => {
+        console.error('Error calling OpenRouter API:', error);
+        if (outputElement) {
+          outputElement.textContent = `翻译错误: ${error.message}`;
+        }
+      });
+    });
+  }
+  
+  // Function to generate reply suggestions for main post
+  function generateMainPostReplySuggestion(originalPost, subreddit) {
+    // Check if API key is available
+    chrome.storage.local.get(['openRouterApiKey', 'promptTemplate'], function(result) {
+      const apiKey = result.openRouterApiKey;
+      let template = result.promptTemplate || promptTemplate;
+      
+      if (!apiKey) {
+        alert('请在侧边栏设置中输入您的OpenRouter API密钥。');
+        return;
+      }
+      
+      // Replace template variables
+      const processedTemplate = template
+        .replace(/{{originalPost}}/g, originalPost || '')
+        .replace(/{{replyContent}}/g, '')
+        .replace(/{{subreddit}}/g, subreddit || '');
+      
+      // Call OpenRouter API
+      const url = 'https://openrouter.ai/api/v1/chat/completions';
+      const headers = {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      };
+      
+      const payload = {
+        'model': 'anthropic/claude-3-opus:beta',  // Default to Claude 3 Opus
+        'messages': [
+          {'role': 'user', 'content': processedTemplate}
+        ],
+        'stream': true
+      };
+      
+      // Get the comment content element
+      const commentContentElement = document.getElementById('comment-content');
+      
+      // Stream the response
+      fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(payload)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        let fullContent = '';
+        
+        function processStream({ done, value }) {
+          if (done) {
+            return;
+          }
+          
+          buffer += decoder.decode(value, { stream: true });
+          
+          // Process complete lines
+          let lines = buffer.split('\n');
+          buffer = lines.pop(); // Keep the last incomplete line in the buffer
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.substring(6);
+              if (data === '[DONE]') {
+                // Stream completed
+                return;
+              }
+              
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices[0].delta.content;
+                if (content) {
+                  fullContent += content;
+                  if (commentContentElement) {
+                    commentContentElement.textContent = fullContent;
+                  }
+                }
+              } catch (e) {
+                console.error('Error parsing streaming data:', e);
+              }
+            }
+          }
+          
+          // Continue reading
+          return reader.read().then(processStream);
+        }
+        
+        return reader.read().then(processStream);
+      })
+      .catch(error => {
+        console.error('Error calling OpenRouter API:', error);
+        if (commentContentElement) {
+          commentContentElement.textContent = `错误: ${error.message}`;
+        }
+      });
+    });
+  }
+  
+  // Function to generate reply suggestions using OpenRouter API
+  function generateReplySuggestion(originalPost, replyContent, subreddit, commentElement) {
+    // Check if API key is available
+    chrome.storage.local.get(['openRouterApiKey', 'promptTemplate'], function(result) {
+      const apiKey = result.openRouterApiKey;
+      let template = result.promptTemplate || promptTemplate;
+      
+      if (!apiKey) {
+        alert('请在侧边栏设置中输入您的OpenRouter API密钥。');
+        return;
+      }
+      
+      // Create suggestion container if it doesn't exist
+      let suggestionContainer = commentElement.querySelector('.reply-suggestion-container');
+      if (!suggestionContainer) {
+        suggestionContainer = document.createElement('div');
+        suggestionContainer.className = 'reply-suggestion-container';
+        
+        // Find a good place to insert the suggestion container
+        const possibleTargets = [
+          commentElement.querySelector('.md'),
+          commentElement.querySelector('div[data-testid="comment-content"]'),
+          commentElement
+        ];
+        
+        let insertTarget = null;
+        for (const target of possibleTargets) {
+          if (target) {
+            insertTarget = target;
+            break;
+          }
+        }
+        
+        if (!insertTarget) return;
+        
+        // Append after the target
+        if (insertTarget.nextSibling) {
+          insertTarget.parentNode.insertBefore(suggestionContainer, insertTarget.nextSibling);
+        } else {
+          insertTarget.parentNode.appendChild(suggestionContainer);
+        }
+      }
+      
+      // Show loading state
+      suggestionContainer.innerHTML = '<div class="suggestion-loading">正在生成回复建议...</div>';
+      
+      // Replace template variables
+      const processedTemplate = template
+        .replace(/{{originalPost}}/g, originalPost || '')
+        .replace(/{{replyContent}}/g, replyContent || '')
+        .replace(/{{subreddit}}/g, subreddit || '');
+      
+      // Call OpenRouter API
+      const url = 'https://openrouter.ai/api/v1/chat/completions';
+      const headers = {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      };
+      
+      const payload = {
+        'model': 'anthropic/claude-3-opus:beta',  // Default to Claude 3 Opus
+        'messages': [
+          {'role': 'user', 'content': processedTemplate}
+        ],
+        'stream': true
+      };
+      
+      // Create suggestion content element
+      const suggestionContent = document.createElement('div');
+      suggestionContent.className = 'suggestion-content';
+      const suggestionHeader = document.createElement('div');
+      suggestionHeader.className = 'suggestion-header';
+      suggestionHeader.textContent = '回复建议（AI生成）：';
+      suggestionContainer.innerHTML = '';
+      suggestionContainer.appendChild(suggestionHeader);
+      suggestionContainer.appendChild(suggestionContent);
+      
+      // Create copy button
+      const copyButton = document.createElement('button');
+      copyButton.className = 'copy-suggestion-button';
+      copyButton.textContent = '复制';
+      copyButton.addEventListener('click', function() {
+        const text = suggestionContent.textContent;
+        navigator.clipboard.writeText(text).then(() => {
+          copyButton.textContent = '已复制！';
+          setTimeout(() => {
+            copyButton.textContent = '复制';
+          }, 2000);
+        });
+      });
+      suggestionContainer.appendChild(copyButton);
+      
+      // Create close button
+      const closeButton = document.createElement('button');
+      closeButton.className = 'close-suggestion-button';
+      closeButton.textContent = '×';
+      closeButton.addEventListener('click', function() {
+        suggestionContainer.remove();
+      });
+      suggestionContainer.appendChild(closeButton);
+      
+      // Stream the response
+      fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(payload)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        
+        function processStream({ done, value }) {
+          if (done) {
+            return;
+          }
+          
+          buffer += decoder.decode(value, { stream: true });
+          
+          // Process complete lines
+          let lines = buffer.split('\n');
+          buffer = lines.pop(); // Keep the last incomplete line in the buffer
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.substring(6);
+              if (data === '[DONE]') {
+                // Stream completed
+                return;
+              }
+              
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices[0].delta.content;
+                if (content) {
+                  suggestionContent.textContent += content;
+                }
+              } catch (e) {
+                console.error('Error parsing streaming data:', e);
+              }
+            }
+          }
+          
+          // Continue reading
+          return reader.read().then(processStream);
+        }
+        
+        return reader.read().then(processStream);
+      })
+      .catch(error => {
+        console.error('Error calling OpenRouter API:', error);
+        suggestionContainer.innerHTML = `<div class="suggestion-error">错误: ${error.message}</div>`;
+      });
+    });
+  }
+  
+  // Function to set up event listeners for sidebar settings
+  function setupSidebarEventListeners() {
+    // Save API key
+    const saveApiKeyButton = document.getElementById('save-api-key');
+    if (saveApiKeyButton) {
+      saveApiKeyButton.addEventListener('click', function() {
+        const apiKeyInput = document.getElementById('openrouter-api-key');
+        if (apiKeyInput && apiKeyInput.value.trim()) {
+          chrome.storage.local.set({ 'openRouterApiKey': apiKeyInput.value.trim() }, function() {
+            alert('API密钥保存成功！');
+            openRouterApiKey = apiKeyInput.value.trim();
+          });
+        } else {
+          alert('请输入有效的API密钥。');
+        }
+      });
+    }
+    
+    // Save prompt template
+    const saveTemplateButton = document.getElementById('save-prompt-template');
+    if (saveTemplateButton) {
+      saveTemplateButton.addEventListener('click', function() {
+        const templateInput = document.getElementById('prompt-template');
+        if (templateInput && templateInput.value.trim()) {
+          chrome.storage.local.set({ 'promptTemplate': templateInput.value.trim() }, function() {
+            alert('提示模板保存成功！');
+            promptTemplate = templateInput.value.trim();
+          });
+        } else {
+          alert('请输入有效的提示模板。');
+        }
+      });
+    }
+  }
+  
   // Initial sidebar creation
   createSidebar();
+  
+  // Set up event listeners after sidebar is created
+  setTimeout(setupSidebarEventListeners, 1000);
   
   // Set up a MutationObserver to detect URL changes (Reddit is a SPA)
   let lastUrl = location.href;
@@ -483,6 +1120,7 @@
     if (url !== lastUrl) {
       lastUrl = url;
       handleUrlChange();
+      setTimeout(setupSidebarEventListeners, 1000);
     }
   }).observe(document, {subtree: true, childList: true});
   

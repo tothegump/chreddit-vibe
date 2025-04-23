@@ -3,7 +3,7 @@
   "name": "Reddit Sidebar Tool",
   "version": "1.0",
   "description": "A sidebar tool for Reddit that displays different styles based on page type",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": ["*://*.reddit.com/*"],
   "action": {
     "default_icon": {
