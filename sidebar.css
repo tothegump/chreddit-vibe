@@ -141,7 +141,8 @@
 
 /* Post title and content styles */
 .post-title-container,
-.post-content-container {
+.post-content-container,
+.comment-content-container {
   max-height: 300px;
   overflow-y: auto;
   background-color: #fafafa;
@@ -162,12 +163,38 @@
   line-height: 1.4;
 }
 
-#post-content {
+#post-content,
+#comment-content {
   margin: 0;
   font-size: 14px;
   line-height: 1.5;
   color: #1a1a1b;
   white-space: pre-wrap;
+}
+
+/* ZJM Button styles */
+.zjm-button {
+  display: inline-block;
+  background-color: #ff4500;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin-right: 8px;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background-color 0.2s;
+  vertical-align: middle;
+}
+
+.zjm-button:hover {
+  background-color: #e03d00;
+}
+
+.zjm-button:active {
+  background-color: #c63300;
 }
 
 .analytics-item {

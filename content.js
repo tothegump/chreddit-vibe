@@ -53,6 +53,12 @@
             </div>
           </div>
           <div class="tool-section">
+            <h4>评论内容</h4>
+            <div class="comment-content-container">
+              <p id="comment-content">点击评论上的「zjm」按钮查看内容</p>
+            </div>
+          </div>
+          <div class="tool-section">
             <h4>Post Analytics</h4>
             <div class="analytics-item">
               <span class="label">Comments:</span>
@@ -257,6 +263,9 @@
       }
     }
     
+    // Add zjm buttons to comments after a short delay
+    setTimeout(addZjmButtonsToComments, 1000);
+    
     // Try again after a delay to handle dynamic content loading
     setTimeout(() => {
       console.log('Retrying content extraction after delay...');
@@ -324,6 +333,146 @@
     createSidebar();
   }
   
+  // Function to add zjm buttons to comments
+  function addZjmButtonsToComments() {
+    if (!isPostDetailPage()) return;
+    
+    console.log('Adding zjm buttons to comments...');
+    
+    // Different selectors to try for comments (Reddit's DOM structure can vary)
+    const commentSelectors = [
+      // New Reddit selectors
+      'shreddit-comment',
+      'div[data-testid="comment"]',
+      // Old Reddit selectors
+      'div.comment',
+      // Generic fallbacks
+      'div.thing.comment'
+    ];
+    
+    let comments = [];
+    
+    // Try each comment selector until we find one that works
+    for (const selector of commentSelectors) {
+      try {
+        const foundComments = document.querySelectorAll(selector);
+        if (foundComments && foundComments.length > 0) {
+          comments = foundComments;
+          console.log(`Found ${comments.length} comments using selector: ${selector}`);
+          break;
+        }
+      } catch (e) {
+        console.error('Error with comment selector:', selector, e);
+      }
+    }
+    
+    // Add zjm button to each comment
+    comments.forEach((comment, index) => {
+      // Check if button already exists
+      if (comment.querySelector('.zjm-button')) return;
+      
+      // Find a good place to insert the button
+      let insertTarget = null;
+      
+      // Try different targets for button insertion
+      const possibleTargets = [
+        comment.querySelector('div[data-testid="comment-top-meta"]'),
+        comment.querySelector('.tagline'),
+        comment.querySelector('.entry'),
+        comment
+      ];
+      
+      for (const target of possibleTargets) {
+        if (target) {
+          insertTarget = target;
+          break;
+        }
+      }
+      
+      if (!insertTarget) return;
+      
+      // Create zjm button
+      const zjmButton = document.createElement('button');
+      zjmButton.className = 'zjm-button';
+      zjmButton.textContent = 'zjm';
+      zjmButton.dataset.commentIndex = index;
+      
+      // Add click event listener
+      zjmButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Extract comment content
+        const commentContent = extractCommentContent(comment);
+        
+        // Update sidebar with comment content
+        const commentContentElement = document.getElementById('comment-content');
+        if (commentContentElement && commentContent) {
+          commentContentElement.textContent = commentContent;
+        }
+      });
+      
+      // Insert button at the beginning of the target element
+      if (insertTarget.firstChild) {
+        insertTarget.insertBefore(zjmButton, insertTarget.firstChild);
+      } else {
+        insertTarget.appendChild(zjmButton);
+      }
+    });
+  }
+  
+  // Function to extract comment content
+  function extractCommentContent(commentElement) {
+    if (!commentElement) return null;
+    
+    // Different selectors to try for comment content
+    const contentSelectors = [
+      // New Reddit selectors
+      'div[data-testid="comment"] div[data-testid="comment-content"]',
+      'div[slot="comment"]',
+      'div[data-click-id="text"]',
+      // Old Reddit selectors
+      'div.usertext-body div.md',
+      // Generic fallbacks
+      'p',
+      'div.md'
+    ];
+    
+    let commentContent = null;
+    
+    // Try to find content within this specific comment
+    for (const selector of contentSelectors) {
+      try {
+        const contentElement = commentElement.querySelector(selector);
+        if (contentElement && contentElement.textContent.trim()) {
+          commentContent = contentElement.textContent.trim();
+          break;
+        }
+      } catch (e) {
+        console.error('Error extracting comment content:', e);
+      }
+    }
+    
+    // If we couldn't find content with selectors, try to get all text from the comment
+    if (!commentContent) {
+      try {
+        // Filter out the username, points, time, etc.
+        const fullText = commentElement.textContent;
+        // Simple heuristic: take text after common metadata patterns
+        const contentMatch = fullText.match(/(?:points|ago|score hidden)\s*(.+)/s);
+        if (contentMatch && contentMatch[1]) {
+          commentContent = contentMatch[1].trim();
+        } else {
+          commentContent = fullText;
+        }
+      } catch (e) {
+        console.error('Error with fallback comment extraction:', e);
+      }
+    }
+    
+    return commentContent;
+  }
+  
   // Initial sidebar creation
   createSidebar();
   
@@ -336,5 +485,28 @@
       handleUrlChange();
     }
   }).observe(document, {subtree: true, childList: true});
+  
+  // Set up another MutationObserver to detect new comments being loaded
+  const commentObserver = new MutationObserver((mutations) => {
+    if (isPostDetailPage()) {
+      // Check if any mutations might have added new comments
+      const shouldAddButtons = mutations.some(mutation => {
+        return mutation.addedNodes.length > 0 || 
+               (mutation.target && mutation.target.tagName && 
+                (mutation.target.tagName.toLowerCase() === 'shreddit-comment' || 
+                 mutation.target.classList.contains('comment')));
+      });
+      
+      if (shouldAddButtons) {
+        addZjmButtonsToComments();
+      }
+    }
+  });
+  
+  // Start observing for comment changes
+  commentObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
   
 })();
