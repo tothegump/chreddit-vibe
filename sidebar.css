@@ -304,6 +304,86 @@
   max-width: 95%;
 }
 
+/* Options container */
+.options-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+/* Option wrapper */
+.option-wrapper {
+  position: relative;
+  border: 1px solid #edeff1;
+  border-radius: 4px;
+  background-color: white;
+  padding: 10px;
+  transition: box-shadow 0.2s;
+}
+
+.option-wrapper:hover {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Option number */
+.option-number {
+  font-weight: bold;
+  color: #0079d3;
+  margin-bottom: 5px;
+  font-size: 14px;
+  border-bottom: 1px solid #edeff1;
+  padding-bottom: 5px;
+}
+
+/* Option content */
+.option-content {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1a1a1b;
+  white-space: pre-wrap;
+  margin-bottom: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+/* Copy option button */
+.copy-option-button {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  background-color: #0079d3;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.copy-option-button:hover {
+  background-color: #0066b2;
+}
+
+/* Copy all button */
+.copy-all-button {
+  position: absolute;
+  right: 30px;
+  bottom: 10px;
+  background-color: #0079d3;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.copy-all-button:hover {
+  background-color: #0066b2;
+}
+
 .suggestion-header {
   font-size: 14px;
   font-weight: bold;
@@ -345,7 +425,7 @@
 }
 
 .copy-suggestion-button {
-  right: 30px;
+  right: 80px; /* Moved to make room for copy all button */
   bottom: 10px;
   background-color: #0079d3;
   color: white;

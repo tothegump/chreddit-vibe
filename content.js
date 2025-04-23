@@ -10,10 +10,35 @@
   // Default API key and prompt template
   let openRouterApiKey = '';
   let promptTemplate = `You are a helpful assistant providing suggestions for a Reddit reply. 
+
 Original post: {{originalPost}}
 {{#if replyContent}}Reply to: {{replyContent}}{{/if}}
+Subreddit: {{subreddit}}
 
-Provide a thoughtful, engaging response that's appropriate for the subreddit. Be concise but comprehensive.`;
+Please generate EXACTLY 3 different reply options that would be appropriate for this subreddit. Each option should have a different tone or approach:
+1. A thoughtful, detailed response
+2. A concise, to-the-point response
+3. A friendly, conversational response
+
+You MUST format your response as a valid JSON object with the following structure:
+{
+  "options": [
+    {
+      "type": "thoughtful",
+      "content": "First reply option text here..."
+    },
+    {
+      "type": "concise",
+      "content": "Second reply option text here..."
+    },
+    {
+      "type": "friendly",
+      "content": "Third reply option text here..."
+    }
+  ]
+}
+
+DO NOT include any explanations or additional text outside this JSON structure. ONLY return the JSON object.`;
   
   // Translation prompt template
   let translationPrompt = `请将以下英文内容翻译成中文，并在翻译后添加一个简短的解释，帮助理解内容的背景和要点：
@@ -281,8 +306,7 @@ Provide a thoughtful, engaging response that's appropriate for the subreddit. Be
       'div.expando div.usertext-body',
       'div.expando div.md',
       // Generic fallbacks
-      'div.post-content',
-      'article'
+      'div.post-content'
     ];
     
     let postTitle = null;
@@ -302,12 +326,30 @@ Provide a thoughtful, engaging response that's appropriate for the subreddit. Be
       }
     }
     
+    // 检查是否是只有标题的帖子
+    // 在Reddit上，可以通过检查特定元素或属性来确定
+    const isTextPost = document.querySelector('shreddit-post[post-type="text"]') !== null;
+    const hasTextBody = document.querySelector('shreddit-post div[slot="text-body"]') !== null;
+    
+    // 如果是文本帖子但没有文本内容，则很可能是只有标题的帖子
+    if (isTextPost && !hasTextBody) {
+      console.log('This appears to be a title-only post');
+      return { title: postTitle, content: '' };
+    }
+    
     // Try each content selector until we find one that works
     for (const selector of contentSelectors) {
       try {
         const contentElement = document.querySelector(selector);
         if (contentElement && contentElement.textContent.trim()) {
-          postContent = contentElement.textContent.trim();
+          // 检查内容长度，过滤掉可能的误提取
+          const text = contentElement.textContent.trim();
+          // 如果内容过长或包含特定的HTML标记，可能是误提取
+          if (text.length > 10000 || text.includes('<') || text.includes('>')) {
+            console.log('Skipping likely invalid content from selector:', selector);
+            continue;
+          }
+          postContent = text;
           console.log('Found post content using selector:', selector);
           break;
         }
@@ -316,31 +358,16 @@ Provide a thoughtful, engaging response that's appropriate for the subreddit. Be
       }
     }
     
-    // Fallback method: Try to find any paragraphs within the post area
+    // 如果没有找到内容，可能是只有标题的帖子
     if (!postContent) {
-      try {
-        // Look for main content area and extract paragraphs
-        const mainContent = document.querySelector('main');
-        if (mainContent) {
-          const paragraphs = mainContent.querySelectorAll('p');
-          if (paragraphs && paragraphs.length > 0) {
-            // Combine paragraphs into content
-            const contentArray = [];
-            paragraphs.forEach(p => {
-              if (p.textContent.trim().length > 20) { // Only include substantial paragraphs
-                contentArray.push(p.textContent.trim());
-              }
-            });
-            
-            if (contentArray.length > 0) {
-              postContent = contentArray.join('\n\n');
-              console.log('Found post content using paragraph fallback method');
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Error with paragraph fallback method:', e);
-      }
+      console.log('No content found, this may be a title-only post');
+      return { title: postTitle, content: '' };
+    }
+    
+    // 额外检查：如果提取的内容包含大量的HTML或看起来不像帖子内容，则忽略
+    if (postContent && (postContent.includes('<html') || postContent.includes('<body'))) {
+      console.log('Content appears to be HTML, ignoring');
+      postContent = '';
     }
     
     // Debug output
@@ -351,6 +378,7 @@ Provide a thoughtful, engaging response that's appropriate for the subreddit. Be
       contentLength: postContent ? postContent.length : 0
     });
     
+    // 返回提取的标题和内容
     return { title: postTitle, content: postContent };
   }
   
@@ -375,28 +403,57 @@ Provide a thoughtful, engaging response that's appropriate for the subreddit. Be
     }
     
     if (postContentElement) {
-      if (content) {
+      if (content && content.trim() !== '') {
         postContentElement.textContent = content;
       } else {
-        postContentElement.textContent = '无法获取内容';
+        // 如果没有内容，显示为空或特定消息
+        postContentElement.textContent = '帖子没有内容';
+        // 隐藏内容容器或减小其高度
+        const container = postContentElement.closest('.post-content-container');
+        if (container) {
+          container.style.maxHeight = '50px';
+        }
       }
     }
     
     // Add click event listener for main post suggestion button
     if (mainPostSuggestButton) {
       mainPostSuggestButton.addEventListener('click', function() {
-        const originalPost = `${title || ''}
-${content || ''}`;
+        // 组合标题和内容，处理只有标题没有内容的情况
+        let originalPost = '';
+        if (title && content && content.trim() !== '' && content !== '帖子没有内容') {
+          originalPost = `${title}\n\n${content}`;
+        } else if (title) {
+          originalPost = title; // 只有标题的情况
+          console.log('只使用标题生成回复建议，没有内容');
+        } else {
+          originalPost = '';
+        }
         const subreddit = extractSubreddit() || '';
         
-        // Create a container for the suggestion in the sidebar
-        const commentContentElement = document.getElementById('comment-content');
-        if (commentContentElement) {
-          commentContentElement.textContent = '正在生成回复建议...';
+        // 生成回复建议，但不覆盖评论内容区域
+        // 而是创建一个新的容器显示在帖子内容下方
+        
+        // 检查是否已经存在回复建议容器
+        let suggestionContainer = document.querySelector('.main-post-suggestion-container');
+        
+        // 如果不存在，创建一个新的
+        if (!suggestionContainer) {
+          suggestionContainer = document.createElement('div');
+          suggestionContainer.className = 'main-post-suggestion-container reply-suggestion-container';
           
-          // Generate reply suggestion for main post
-          generateMainPostReplySuggestion(originalPost, subreddit);
+          // 将容器添加到帖子内容下方
+          const postContentContainer = document.querySelector('.post-content-container');
+          if (postContentContainer && postContentContainer.parentNode) {
+            postContentContainer.parentNode.insertBefore(suggestionContainer, postContentContainer.nextSibling);
+          }
         }
+        
+        // 显示加载状态
+        suggestionContainer.innerHTML = '<div class="suggestion-loading">正在生成回复建议...</div>';
+        
+        // Generate reply suggestion for main post
+        generateReplySuggestion(originalPost, null, subreddit, suggestionContainer);
       });
     }
     
@@ -440,13 +497,22 @@ ${content || ''}`;
         const postTitle = postTitleElement ? postTitleElement.textContent : '';
         const postContent = postContentElement ? postContentElement.textContent : '';
         
+        // 如果标题和内容都没有，则无法翻译
         if (!postTitle && !postContent) {
           alert('无法获取帖子内容进行翻译。');
           return;
         }
         
-        // Combine title and content
-        const fullContent = `${postTitle}\n\n${postContent}`;
+        // 如果只有标题没有内容，这是正常的，只翻译标题
+        
+        // 组合标题和内容，处理只有标题没有内容的情况
+        let fullContent = '';
+        if (postTitle && postContent && postContent.trim() !== '' && postContent !== '帖子没有内容') {
+          fullContent = `${postTitle}\n\n${postContent}`;
+        } else if (postTitle) {
+          fullContent = postTitle; // 只有标题的情况
+          console.log('只翻译标题，没有内容');
+        }
         
         // Show translation section
         const translationSection = document.getElementById('translation-section');
@@ -642,7 +708,17 @@ ${content || ''}`;
         
         // Get original post content
         const { title, content } = extractPostContent();
-        const originalPost = `${title}\n${content}`;
+        
+        // 组合标题和内容，处理只有标题没有内容的情况
+        let originalPost = '';
+        if (title && content && content.trim() !== '' && content !== '帖子没有内容') {
+          originalPost = `${title}\n\n${content}`;
+        } else if (title) {
+          originalPost = title; // 只有标题的情况
+          console.log('只使用标题生成回复建议，没有内容');
+        } else {
+          originalPost = '无标题无内容的帖子';
+        }
         
         // Get comment content if replying to a comment
         const commentContent = extractCommentContent(comment);
@@ -811,106 +887,7 @@ ${content || ''}`;
     });
   }
   
-  // Function to generate reply suggestions for main post
-  function generateMainPostReplySuggestion(originalPost, subreddit) {
-    // Check if API key is available
-    chrome.storage.local.get(['openRouterApiKey', 'promptTemplate'], function(result) {
-      const apiKey = result.openRouterApiKey;
-      let template = result.promptTemplate || promptTemplate;
-      
-      if (!apiKey) {
-        alert('请在侧边栏设置中输入您的OpenRouter API密钥。');
-        return;
-      }
-      
-      // Replace template variables
-      const processedTemplate = template
-        .replace(/{{originalPost}}/g, originalPost || '')
-        .replace(/{{replyContent}}/g, '')
-        .replace(/{{subreddit}}/g, subreddit || '');
-      
-      // Call OpenRouter API
-      const url = 'https://openrouter.ai/api/v1/chat/completions';
-      const headers = {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      };
-      
-      const payload = {
-        'model': 'anthropic/claude-3-opus:beta',  // Default to Claude 3 Opus
-        'messages': [
-          {'role': 'user', 'content': processedTemplate}
-        ],
-        'stream': true
-      };
-      
-      // Get the comment content element
-      const commentContentElement = document.getElementById('comment-content');
-      
-      // Stream the response
-      fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(payload)
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let buffer = '';
-        let fullContent = '';
-        
-        function processStream({ done, value }) {
-          if (done) {
-            return;
-          }
-          
-          buffer += decoder.decode(value, { stream: true });
-          
-          // Process complete lines
-          let lines = buffer.split('\n');
-          buffer = lines.pop(); // Keep the last incomplete line in the buffer
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.substring(6);
-              if (data === '[DONE]') {
-                // Stream completed
-                return;
-              }
-              
-              try {
-                const parsed = JSON.parse(data);
-                const content = parsed.choices[0].delta.content;
-                if (content) {
-                  fullContent += content;
-                  if (commentContentElement) {
-                    commentContentElement.textContent = fullContent;
-                  }
-                }
-              } catch (e) {
-                console.error('Error parsing streaming data:', e);
-              }
-            }
-          }
-          
-          // Continue reading
-          return reader.read().then(processStream);
-        }
-        
-        return reader.read().then(processStream);
-      })
-      .catch(error => {
-        console.error('Error calling OpenRouter API:', error);
-        if (commentContentElement) {
-          commentContentElement.textContent = `错误: ${error.message}`;
-        }
-      });
-    });
-  }
+  // 删除这个函数，因为我们现在使用generateReplySuggestion函数来处理主帖回复建议
   
   // Function to generate reply suggestions using OpenRouter API
   function generateReplySuggestion(originalPost, replyContent, subreddit, commentElement) {
@@ -979,30 +956,84 @@ ${content || ''}`;
         'stream': true
       };
       
-      // Create suggestion content element
-      const suggestionContent = document.createElement('div');
-      suggestionContent.className = 'suggestion-content';
+      // Create suggestion container elements
+      suggestionContainer.innerHTML = '';
+      
+      // Add header
       const suggestionHeader = document.createElement('div');
       suggestionHeader.className = 'suggestion-header';
       suggestionHeader.textContent = '回复建议（AI生成）：';
-      suggestionContainer.innerHTML = '';
       suggestionContainer.appendChild(suggestionHeader);
-      suggestionContainer.appendChild(suggestionContent);
       
-      // Create copy button
-      const copyButton = document.createElement('button');
-      copyButton.className = 'copy-suggestion-button';
-      copyButton.textContent = '复制';
-      copyButton.addEventListener('click', function() {
-        const text = suggestionContent.textContent;
-        navigator.clipboard.writeText(text).then(() => {
-          copyButton.textContent = '已复制！';
-          setTimeout(() => {
-            copyButton.textContent = '复制';
-          }, 2000);
+      // Create options container
+      const optionsContainer = document.createElement('div');
+      optionsContainer.className = 'options-container';
+      suggestionContainer.appendChild(optionsContainer);
+      
+      // Create three option elements (will be populated by stream)
+      const optionElements = [];
+      for (let i = 1; i <= 3; i++) {
+        const optionWrapper = document.createElement('div');
+        optionWrapper.className = 'option-wrapper';
+        
+        const optionNumber = document.createElement('div');
+        optionNumber.className = 'option-number';
+        optionNumber.textContent = `选项 ${i}`;
+        optionWrapper.appendChild(optionNumber);
+        
+        const optionContent = document.createElement('div');
+        optionContent.className = 'option-content';
+        optionContent.dataset.optionNumber = i;
+        optionWrapper.appendChild(optionContent);
+        
+        const copyOptionButton = document.createElement('button');
+        copyOptionButton.className = 'copy-option-button';
+        copyOptionButton.textContent = '复制';
+        copyOptionButton.dataset.optionNumber = i;
+        copyOptionButton.addEventListener('click', function() {
+          const text = optionContent.textContent;
+          navigator.clipboard.writeText(text).then(() => {
+            copyOptionButton.textContent = '已复制！';
+            setTimeout(() => {
+              copyOptionButton.textContent = '复制';
+            }, 2000);
+          });
         });
+        optionWrapper.appendChild(copyOptionButton);
+        
+        optionsContainer.appendChild(optionWrapper);
+        optionElements.push(optionContent);
+      }
+      
+      // Add loading indicator
+      const loadingIndicator = document.createElement('div');
+      loadingIndicator.className = 'suggestion-loading';
+      loadingIndicator.textContent = '正在生成回复建议...';
+      suggestionContainer.appendChild(loadingIndicator);
+      
+      // Create copy all button
+      const copyAllButton = document.createElement('button');
+      copyAllButton.className = 'copy-all-button';
+      copyAllButton.textContent = '复制全部';
+      copyAllButton.addEventListener('click', function() {
+        // Collect all option texts
+        let allText = '';
+        optionElements.forEach((el, index) => {
+          if (el.textContent.trim()) {
+            allText += `选项 ${index + 1}:\n${el.textContent}\n\n`;
+          }
+        });
+        
+        if (allText) {
+          navigator.clipboard.writeText(allText).then(() => {
+            copyAllButton.textContent = '已复制全部！';
+            setTimeout(() => {
+              copyAllButton.textContent = '复制全部';
+            }, 2000);
+          });
+        }
       });
-      suggestionContainer.appendChild(copyButton);
+      suggestionContainer.appendChild(copyAllButton);
       
       // Create close button
       const closeButton = document.createElement('button');
@@ -1039,11 +1070,19 @@ ${content || ''}`;
           let lines = buffer.split('\n');
           buffer = lines.pop(); // Keep the last incomplete line in the buffer
           
+          // Variables to track the full response and option parsing
+          let fullContent = '';
+          
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const data = line.substring(6);
               if (data === '[DONE]') {
                 // Stream completed
+                // Remove loading indicator when done
+                const loadingIndicator = suggestionContainer.querySelector('.suggestion-loading');
+                if (loadingIndicator) {
+                  loadingIndicator.remove();
+                }
                 return;
               }
               
@@ -1051,7 +1090,10 @@ ${content || ''}`;
                 const parsed = JSON.parse(data);
                 const content = parsed.choices[0].delta.content;
                 if (content) {
-                  suggestionContent.textContent += content;
+                  fullContent += content;
+                  
+                  // Parse options from the accumulated content
+                  parseAndDisplayOptions(fullContent, optionElements);
                 }
               } catch (e) {
                 console.error('Error parsing streaming data:', e);
@@ -1069,6 +1111,69 @@ ${content || ''}`;
         console.error('Error calling OpenRouter API:', error);
         suggestionContainer.innerHTML = `<div class="suggestion-error">错误: ${error.message}</div>`;
       });
+      
+      // Function to parse options from content and display them
+      function parseAndDisplayOptions(content, optionElements) {
+        try {
+          // Try to find a valid JSON object in the content
+          // This is a bit tricky with streaming responses, so we need to be careful
+          let jsonStartIndex = content.indexOf('{');
+          let jsonEndIndex = content.lastIndexOf('}');
+          
+          // Make sure we have both opening and closing braces
+          if (jsonStartIndex !== -1 && jsonEndIndex !== -1 && jsonEndIndex > jsonStartIndex) {
+            // Extract the JSON substring
+            let jsonStr = content.substring(jsonStartIndex, jsonEndIndex + 1);
+            
+            try {
+              // Try to parse the JSON
+              const data = JSON.parse(jsonStr);
+              
+              // Check if we have options array
+              if (data.options && Array.isArray(data.options)) {
+                // Remove loading indicator once we have valid JSON
+                const loadingIndicator = suggestionContainer.querySelector('.suggestion-loading');
+                if (loadingIndicator) {
+                  loadingIndicator.remove();
+                }
+                
+                // Update option elements with content
+                data.options.forEach((option, index) => {
+                  if (index < optionElements.length && option.content) {
+                    // Update option number with type
+                    const optionNumber = optionElements[index].parentNode.querySelector('.option-number');
+                    if (optionNumber) {
+                      let typeLabel = '';
+                      switch(option.type) {
+                        case 'thoughtful':
+                          typeLabel = '详细回复';
+                          break;
+                        case 'concise':
+                          typeLabel = '简洁回复';
+                          break;
+                        case 'friendly':
+                          typeLabel = '友好回复';
+                          break;
+                        default:
+                          typeLabel = `选项 ${index + 1}`;
+                      }
+                      optionNumber.textContent = typeLabel;
+                    }
+                    
+                    // Update content
+                    optionElements[index].textContent = option.content;
+                  }
+                });
+              }
+            } catch (e) {
+              // If JSON parsing fails, it might be incomplete - that's okay for streaming
+              console.log('Partial JSON received, waiting for more data...');
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing options:', e);
+        }
+      }
     });
   }
   
