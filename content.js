@@ -9,16 +9,19 @@
   
   // Default API key and prompt template
   let openRouterApiKey = '';
+  let additionalRequirements = '';
   let promptTemplate = `You are a helpful assistant providing suggestions for a Reddit reply. 
 
 Original post: {{originalPost}}
 {{#if replyContent}}Reply to: {{replyContent}}{{/if}}
 Subreddit: {{subreddit}}
+{{#if additionalRequirements}}Additional requirements: {{additionalRequirements}}{{/if}}
 
 Please generate EXACTLY 3 different reply options that would be appropriate for this subreddit. Each option should have a different tone or approach:
 1. A thoughtful, detailed response
 2. A concise, to-the-point response
 3. A friendly, conversational response
+notice, the response should be clear and concise, use simple words, better with some personal experience.
 
 You MUST format your response as a valid JSON object with the following structure:
 {
@@ -53,13 +56,16 @@ DO NOT include any explanations or additional text outside this JSON structure. 
 ## 简要解释
 [解释内容]`;
   
-  // Load saved API key and prompt template from storage
-  chrome.storage.local.get(['openRouterApiKey', 'promptTemplate'], function(result) {
+  // Load saved API key, prompt template, and additional requirements from storage
+  chrome.storage.local.get(['openRouterApiKey', 'promptTemplate', 'additionalRequirements'], function(result) {
     if (result.openRouterApiKey) {
       openRouterApiKey = result.openRouterApiKey;
     }
     if (result.promptTemplate) {
       promptTemplate = result.promptTemplate;
+    }
+    if (result.additionalRequirements) {
+      additionalRequirements = result.additionalRequirements;
     }
   });
 
@@ -164,6 +170,9 @@ DO NOT include any explanations or additional text outside this JSON structure. 
               <button class="main-post-suggest-button" id="main-post-suggest-button">获取回复建议</button>
               <button class="translate-button" id="translate-post-button">翻译并解释</button>
             </div>
+            <div class="additional-requirements-container" style="margin-top: 10px;">
+              <textarea id="main-post-additional-requirements" rows="2" placeholder="输入回复建议的额外要求，例如：使用幽默的语气，包含一个相关的例子等"></textarea>
+            </div>
           </div>
           <div class="tool-section translation-section" id="translation-section" style="display: none;">
             <h4>翻译内容</h4>
@@ -214,9 +223,10 @@ DO NOT include any explanations or additional text outside this JSON structure. 
             <textarea id="prompt-template" rows="6" placeholder="Enter your prompt template"></textarea>
             <button class="action-button" id="save-prompt-template">Save Template</button>
             <div class="template-help">
-              <p>Available variables: {{originalPost}}, {{replyContent}}, {{subreddit}}</p>
+              <p>Available variables: {{originalPost}}, {{replyContent}}, {{subreddit}}, {{additionalRequirements}}</p>
             </div>
           </div>
+
         </div>
       `;
     } else {
@@ -431,6 +441,15 @@ DO NOT include any explanations or additional text outside this JSON structure. 
         }
         const subreddit = extractSubreddit() || '';
         
+        // 获取额外要求输入框的内容
+        const additionalRequirementsInput = document.getElementById('main-post-additional-requirements');
+        let additionalReqs = '';
+        if (additionalRequirementsInput && additionalRequirementsInput.value.trim()) {
+          additionalReqs = additionalRequirementsInput.value.trim();
+          // 保存额外要求到存储中，以便下次使用
+          chrome.storage.local.set({ 'additionalRequirements': additionalReqs });
+        }
+        
         // 生成回复建议，但不覆盖评论内容区域
         // 而是创建一个新的容器显示在帖子内容下方
         
@@ -452,8 +471,8 @@ DO NOT include any explanations or additional text outside this JSON structure. 
         // 显示加载状态
         suggestionContainer.innerHTML = '<div class="suggestion-loading">正在生成回复建议...</div>';
         
-        // Generate reply suggestion for main post
-        generateReplySuggestion(originalPost, null, subreddit, suggestionContainer);
+        // Generate reply suggestion for main post with additional requirements
+        generateReplySuggestion(originalPost, null, subreddit, suggestionContainer, additionalReqs);
       });
     }
     
@@ -468,10 +487,11 @@ DO NOT include any explanations or additional text outside this JSON structure. 
       }
     }
     
-    // Load saved API key and prompt template into form fields
-    chrome.storage.local.get(['openRouterApiKey', 'promptTemplate', 'translationPrompt'], function(result) {
+    // Load saved API key, prompt template, and additional requirements into form fields
+    chrome.storage.local.get(['openRouterApiKey', 'promptTemplate', 'translationPrompt', 'additionalRequirements'], function(result) {
       const apiKeyInput = document.getElementById('openrouter-api-key');
       const promptTemplateInput = document.getElementById('prompt-template');
+      const mainPostRequirementsInput = document.getElementById('main-post-additional-requirements');
       
       if (apiKeyInput && result.openRouterApiKey) {
         apiKeyInput.value = result.openRouterApiKey;
@@ -481,6 +501,11 @@ DO NOT include any explanations or additional text outside this JSON structure. 
         promptTemplateInput.value = result.promptTemplate;
       } else if (promptTemplateInput) {
         promptTemplateInput.value = promptTemplate;
+      }
+      
+      // 加载额外要求到主帖输入框
+      if (mainPostRequirementsInput && result.additionalRequirements) {
+        mainPostRequirementsInput.value = result.additionalRequirements;
       }
       
       // Update translation prompt if saved
@@ -726,8 +751,12 @@ DO NOT include any explanations or additional text outside this JSON structure. 
         // Get subreddit
         const subreddit = extractSubreddit() || '';
         
-        // Generate reply suggestion
-        generateReplySuggestion(originalPost, commentContent, subreddit, comment);
+        // 获取额外要求（从存储中获取，不为评论添加单独的输入框）
+        chrome.storage.local.get(['additionalRequirements'], function(result) {
+          const additionalReqs = result.additionalRequirements || '';
+          // Generate reply suggestion
+          generateReplySuggestion(originalPost, commentContent, subreddit, comment, additionalReqs);
+        });
       });
       
       // Insert buttons
@@ -890,11 +919,13 @@ DO NOT include any explanations or additional text outside this JSON structure. 
   // 删除这个函数，因为我们现在使用generateReplySuggestion函数来处理主帖回复建议
   
   // Function to generate reply suggestions using OpenRouter API
-  function generateReplySuggestion(originalPost, replyContent, subreddit, commentElement) {
+  function generateReplySuggestion(originalPost, replyContent, subreddit, commentElement, customRequirements) {
     // Check if API key is available
-    chrome.storage.local.get(['openRouterApiKey', 'promptTemplate'], function(result) {
+    chrome.storage.local.get(['openRouterApiKey', 'promptTemplate', 'additionalRequirements'], function(result) {
       const apiKey = result.openRouterApiKey;
       let template = result.promptTemplate || promptTemplate;
+      // 如果传入了自定义要求，优先使用它，否则使用存储中的要求
+      let requirements = customRequirements || result.additionalRequirements || '';
       
       if (!apiKey) {
         alert('请在侧边栏设置中输入您的OpenRouter API密钥。');
@@ -932,14 +963,23 @@ DO NOT include any explanations or additional text outside this JSON structure. 
         }
       }
       
-      // Show loading state
-      suggestionContainer.innerHTML = '<div class="suggestion-loading">正在生成回复建议...</div>';
+      // 清空容器并添加加载提示
+      suggestionContainer.innerHTML = '<div class="suggestion-header">回复建议（AI生成）：</div><div class="suggestion-loading">正在生成回复建议...</div>';
+      
+      // 获取加载指示器元素
+      const loadingIndicator = suggestionContainer.querySelector('.suggestion-loading');
+      
+      // 创建选项容器（将在加载完成后显示）
+      const optionsContainer = document.createElement('div');
+      optionsContainer.className = 'options-container';
+      optionsContainer.style.display = 'none'; // 初始隐藏
       
       // Replace template variables
       const processedTemplate = template
         .replace(/{{originalPost}}/g, originalPost || '')
         .replace(/{{replyContent}}/g, replyContent || '')
-        .replace(/{{subreddit}}/g, subreddit || '');
+        .replace(/{{subreddit}}/g, subreddit || '')
+        .replace(/{{additionalRequirements}}/g, requirements || '');
       
       // Call OpenRouter API
       const url = 'https://openrouter.ai/api/v1/chat/completions';
@@ -956,21 +996,9 @@ DO NOT include any explanations or additional text outside this JSON structure. 
         'stream': true
       };
       
-      // Create suggestion container elements
-      suggestionContainer.innerHTML = '';
+      // 添加标题（已经包含在加载提示中，不需要额外添加）
       
-      // Add header
-      const suggestionHeader = document.createElement('div');
-      suggestionHeader.className = 'suggestion-header';
-      suggestionHeader.textContent = '回复建议（AI生成）：';
-      suggestionContainer.appendChild(suggestionHeader);
-      
-      // Create options container
-      const optionsContainer = document.createElement('div');
-      optionsContainer.className = 'options-container';
-      suggestionContainer.appendChild(optionsContainer);
-      
-      // Create three option elements (will be populated by stream)
+      // 创建三个选项元素（将由流填充）
       const optionElements = [];
       for (let i = 1; i <= 3; i++) {
         const optionWrapper = document.createElement('div');
@@ -1005,35 +1033,19 @@ DO NOT include any explanations or additional text outside this JSON structure. 
         optionElements.push(optionContent);
       }
       
-      // Add loading indicator
-      const loadingIndicator = document.createElement('div');
-      loadingIndicator.className = 'suggestion-loading';
-      loadingIndicator.textContent = '正在生成回复建议...';
-      suggestionContainer.appendChild(loadingIndicator);
+      // 将选项容器添加到主容器（但保持隐藏状态）
+      suggestionContainer.appendChild(optionsContainer);
       
-      // Create copy all button
-      const copyAllButton = document.createElement('button');
-      copyAllButton.className = 'copy-all-button';
-      copyAllButton.textContent = '复制全部';
-      copyAllButton.addEventListener('click', function() {
-        // Collect all option texts
-        let allText = '';
-        optionElements.forEach((el, index) => {
-          if (el.textContent.trim()) {
-            allText += `选项 ${index + 1}:\n${el.textContent}\n\n`;
-          }
-        });
-        
-        if (allText) {
-          navigator.clipboard.writeText(allText).then(() => {
-            copyAllButton.textContent = '已复制全部！';
-            setTimeout(() => {
-              copyAllButton.textContent = '复制全部';
-            }, 2000);
-          });
-        }
-      });
-      suggestionContainer.appendChild(copyAllButton);
+      // 添加调试信息显示区域，在正式发布时可以移除
+      const debugInfo = document.createElement('div');
+      debugInfo.className = 'debug-info';
+      debugInfo.style.fontSize = '10px';
+      debugInfo.style.color = '#999';
+      debugInfo.style.marginTop = '5px';
+      debugInfo.style.display = 'none'; // 默认隐藏，只在需要时显示
+      suggestionContainer.appendChild(debugInfo);
+      
+      // 移除复制全部按钮，简化界面
       
       // Create close button
       const closeButton = document.createElement('button');
@@ -1078,11 +1090,8 @@ DO NOT include any explanations or additional text outside this JSON structure. 
               const data = line.substring(6);
               if (data === '[DONE]') {
                 // Stream completed
-                // Remove loading indicator when done
-                const loadingIndicator = suggestionContainer.querySelector('.suggestion-loading');
-                if (loadingIndicator) {
-                  loadingIndicator.remove();
-                }
+                // 流式内容完成后，解析选项并显示
+                parseAndDisplayOptions(fullContent, optionElements);
                 return;
               }
               
@@ -1092,8 +1101,18 @@ DO NOT include any explanations or additional text outside this JSON structure. 
                 if (content) {
                   fullContent += content;
                   
-                  // Parse options from the accumulated content
-                  parseAndDisplayOptions(fullContent, optionElements);
+                  // 直接在加载指示器中显示流式内容
+                  const loadingIndicator = suggestionContainer.querySelector('.suggestion-loading');
+                  if (loadingIndicator) {
+                    // 替换"正在生成回复建议..."的文本
+                    if (loadingIndicator.textContent === '正在生成回复建议...') {
+                      loadingIndicator.textContent = content;
+                    } else {
+                      loadingIndicator.textContent += content;
+                    }
+                  }
+                  
+                  // 不在流式过程中解析选项，只在完成时解析
                 }
               } catch (e) {
                 console.error('Error parsing streaming data:', e);
@@ -1115,6 +1134,57 @@ DO NOT include any explanations or additional text outside this JSON structure. 
       // Function to parse options from content and display them
       function parseAndDisplayOptions(content, optionElements) {
         try {
+          // 获取加载指示器与选项容器
+          const loadingIndicator = suggestionContainer.querySelector('.suggestion-loading');
+          const optionsContainerElement = suggestionContainer.querySelector('.options-container');
+          
+          // 更新调试信息
+          const debugInfo = suggestionContainer.querySelector('.debug-info');
+          if (debugInfo) {
+            // 在开发模式下可以显示调试信息
+            // debugInfo.style.display = 'block';
+            // debugInfo.textContent = `接收到内容，长度: ${content.length}`;
+            // 如果内容过长，只显示前100个字符
+            // if (content.length > 100) {
+            //   debugInfo.textContent += `\n前100个字符: ${content.substring(0, 100)}...`;
+            // } else {
+            //   debugInfo.textContent += `\n内容: ${content}`;
+            // }
+          }
+          
+          // 先检查是否有纯文本内容（非JSON格式）
+          if (content.trim() && !content.includes('{') && !content.includes('}')) {
+            // 可能是纯文本回复，直接显示在第一个选项中
+            if (optionElements.length > 0) {
+              // 移除加载指示器
+              if (loadingIndicator) {
+                // 在加载指示器的位置上显示选项容器
+                if (optionsContainerElement) {
+                  optionsContainerElement.style.display = 'block';
+                  loadingIndicator.parentNode.insertBefore(optionsContainerElement, loadingIndicator);
+                }
+                loadingIndicator.remove();
+              }
+              
+              // 更新第一个选项
+              const optionNumber = optionElements[0].parentNode.querySelector('.option-number');
+              if (optionNumber) {
+                optionNumber.textContent = '回复建议';
+              }
+              optionElements[0].textContent = content.trim();
+              
+              // 隐藏其他选项
+              for (let i = 1; i < optionElements.length; i++) {
+                const wrapper = optionElements[i].parentNode;
+                if (wrapper) {
+                  wrapper.style.display = 'none';
+                }
+              }
+              
+              return; // 已经处理完成，不需要继绍JSON解析
+            }
+          }
+          
           // Try to find a valid JSON object in the content
           // This is a bit tricky with streaming responses, so we need to be careful
           let jsonStartIndex = content.indexOf('{');
@@ -1131,17 +1201,29 @@ DO NOT include any explanations or additional text outside this JSON structure. 
               
               // Check if we have options array
               if (data.options && Array.isArray(data.options)) {
-                // Remove loading indicator once we have valid JSON
+                // 将加载指示器替换为选项容器
                 const loadingIndicator = suggestionContainer.querySelector('.suggestion-loading');
                 if (loadingIndicator) {
+                  // 在加载指示器的位置上插入选项容器
+                  const optionsContainerElement = suggestionContainer.querySelector('.options-container');
+                  if (optionsContainerElement) {
+                    optionsContainerElement.style.display = 'block';
+                    loadingIndicator.parentNode.insertBefore(optionsContainerElement, loadingIndicator);
+                  }
                   loadingIndicator.remove();
                 }
                 
                 // Update option elements with content
                 data.options.forEach((option, index) => {
                   if (index < optionElements.length && option.content) {
+                    // 显示该选项的容器
+                    const wrapper = optionElements[index].parentNode;
+                    if (wrapper) {
+                      wrapper.style.display = 'block';
+                    }
+                    
                     // Update option number with type
-                    const optionNumber = optionElements[index].parentNode.querySelector('.option-number');
+                    const optionNumber = wrapper.querySelector('.option-number');
                     if (optionNumber) {
                       let typeLabel = '';
                       switch(option.type) {
@@ -1164,14 +1246,105 @@ DO NOT include any explanations or additional text outside this JSON structure. 
                     optionElements[index].textContent = option.content;
                   }
                 });
+              } else if (data.content) {
+                // 如果返回的是单个内容而不是选项数组
+                // 将加载指示器替换为选项容器
+                const loadingIndicator = suggestionContainer.querySelector('.suggestion-loading');
+                if (loadingIndicator) {
+                  // 在加载指示器的位置上插入选项容器
+                  const optionsContainerElement = suggestionContainer.querySelector('.options-container');
+                  if (optionsContainerElement) {
+                    optionsContainerElement.style.display = 'block';
+                    loadingIndicator.parentNode.insertBefore(optionsContainerElement, loadingIndicator);
+                  }
+                  loadingIndicator.remove();
+                }
+                
+                // 只显示第一个选项
+                if (optionElements.length > 0) {
+                  const optionNumber = optionElements[0].parentNode.querySelector('.option-number');
+                  if (optionNumber) {
+                    optionNumber.textContent = '回复建议';
+                  }
+                  optionElements[0].textContent = data.content;
+                  
+                  // 隐藏其他选项
+                  for (let i = 1; i < optionElements.length; i++) {
+                    const wrapper = optionElements[i].parentNode;
+                    if (wrapper) {
+                      wrapper.style.display = 'none';
+                    }
+                  }
+                }
               }
             } catch (e) {
               // If JSON parsing fails, it might be incomplete - that's okay for streaming
-              console.log('Partial JSON received, waiting for more data...');
+              console.log('Partial JSON received, waiting for more data...', e);
+              
+              // 如果已经收到大量数据但仍然无法解析，尝试将其作为纯文本处理
+              if (content.length > 500 && optionElements.length > 0) {
+                const loadingIndicator = suggestionContainer.querySelector('.suggestion-loading');
+                if (loadingIndicator) {
+                  // 移除加载指示器
+                  loadingIndicator.remove();
+                }
+                
+                // 清理内容中的JSON标记
+                let cleanContent = content.replace(/[{}"]"|"options":|"type":|"content":|"thoughtful":|"concise":|"friendly":/g, '');
+                cleanContent = cleanContent.replace(/\[|\]|,/g, '');
+                
+                // 更新第一个选项
+                if (optionElements.length > 0) {
+                  const optionNumber = optionElements[0].parentNode.querySelector('.option-number');
+                  if (optionNumber) {
+                    optionNumber.textContent = '回复建议';
+                  }
+                  optionElements[0].textContent = cleanContent.trim();
+                  
+                  // 隐藏其他选项
+                  for (let i = 1; i < optionElements.length; i++) {
+                    const wrapper = optionElements[i].parentNode;
+                    if (wrapper) {
+                      wrapper.style.display = 'none';
+                    }
+                  }
+                }
+              }
             }
           }
         } catch (e) {
           console.error('Error parsing options:', e);
+          
+          // 如果解析失败，尝试显示原始内容
+          if (content && content.trim()) {
+            // 将加载指示器替换为选项容器
+            const loadingIndicator = suggestionContainer.querySelector('.suggestion-loading');
+            if (loadingIndicator) {
+              // 在加载指示器的位置上插入选项容器
+              const optionsContainerElement = suggestionContainer.querySelector('.options-container');
+              if (optionsContainerElement) {
+                optionsContainerElement.style.display = 'block';
+                loadingIndicator.parentNode.insertBefore(optionsContainerElement, loadingIndicator);
+              }
+              loadingIndicator.remove();
+            }
+            
+            if (optionElements.length > 0) {
+              const optionNumber = optionElements[0].parentNode.querySelector('.option-number');
+              if (optionNumber) {
+                optionNumber.textContent = '回复建议';
+              }
+              optionElements[0].textContent = content.trim();
+              
+              // 隐藏其他选项
+              for (let i = 1; i < optionElements.length; i++) {
+                const wrapper = optionElements[i].parentNode;
+                if (wrapper) {
+                  wrapper.style.display = 'none';
+                }
+              }
+            }
+          }
         }
       }
     });
