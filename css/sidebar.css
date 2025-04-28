@@ -253,6 +253,14 @@
   cursor: pointer;
   font-size: 12px;
   margin-right: 5px;
+  min-width: 30px;
+  text-align: center;
+  font-weight: bold;
+  display: inline-block;
+  line-height: 1.2;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 /* 建议按钮样式 */

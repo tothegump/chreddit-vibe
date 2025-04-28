@@ -444,11 +444,16 @@ window.RedditSidebarTool.Sidebar = (function() {
       if (!insertTarget) return;
       
       // 创建 zjm 按钮
-      const zjmButton = Utils.createElement('button', {
-        className: 'zjm-button',
-        textContent: 'zjm',
-        'data-comment-index': index
-      });
+      const zjmButton = document.createElement('button');
+      zjmButton.className = 'zjm-button';
+      zjmButton.textContent = 'zjm';
+      zjmButton.dataset.commentIndex = index;
+      
+      // 确保文本内容可见
+      zjmButton.style.display = 'inline-block';
+      zjmButton.style.minWidth = '30px';
+      zjmButton.style.textAlign = 'center';
+      zjmButton.style.fontWeight = 'bold';
       
       // 添加点击事件监听器
       zjmButton.addEventListener('click', function(e) {
@@ -481,11 +486,16 @@ window.RedditSidebarTool.Sidebar = (function() {
       });
       
       // 创建回复建议按钮
-      const suggestButton = Utils.createElement('button', {
-        className: 'suggest-button',
-        textContent: 'Reply Suggestions',
-        'data-comment-index': index
-      });
+      const suggestButton = document.createElement('button');
+      suggestButton.className = 'suggest-button';
+      suggestButton.textContent = 'Reply Suggestions';
+      suggestButton.dataset.commentIndex = index;
+      
+      // 确保文本内容可见
+      suggestButton.style.display = 'inline-block';
+      suggestButton.style.minWidth = '110px';
+      suggestButton.style.textAlign = 'center';
+      suggestButton.style.fontWeight = 'bold';
       
       // 为回复建议添加点击事件监听器
       suggestButton.addEventListener('click', function(e) {
