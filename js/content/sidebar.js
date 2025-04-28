@@ -155,31 +155,48 @@ window.RedditSidebarTool.Sidebar = (function() {
       innerHTML: '<p>© 2025 Reddit Sidebar Tool</p>'
     });
     
-    // 添加关闭按钮
-    const closeButton = Utils.createElement('button', {
-      className: 'sidebar-close-button',
-      textContent: '×'
-    });
+    // 创建关闭按钮
+    const closeButton = document.createElement('button');
+    closeButton.className = 'sidebar-close-button';
+    closeButton.textContent = '×'; // 乘号
+    closeButton.setAttribute('title', '收起侧边栏');
     
-    closeButton.addEventListener('click', function() {
+    // 确保按钮始终可见
+    document.body.appendChild(closeButton);
+    
+    // 添加点击事件
+    closeButton.onclick = function(e) {
+      // 阻止事件传播
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      
+      // 切换侧边栏状态
       sidebar.classList.toggle('collapsed');
       
-      // 存储侧边栏状态
+      // 根据状态更新按钮
       const isCollapsed = sidebar.classList.contains('collapsed');
       if (isCollapsed) {
-        closeButton.textContent = '►'; // 右箭头，表示可以展开
-        closeButton.style.left = '-20px';
+        closeButton.textContent = '◄'; // 左箭头
+        closeButton.style.right = '10px';
+        closeButton.setAttribute('title', '展开侧边栏');
       } else {
-        closeButton.textContent = '×'; // 乘号，表示可以关闭
-        closeButton.style.left = '10px';
+        closeButton.textContent = '×'; // 乘号
+        closeButton.style.right = '330px';
+        closeButton.setAttribute('title', '收起侧边栏');
       }
-    });
+    };
     
     // 组装侧边栏
-    sidebar.appendChild(closeButton);
     sidebar.appendChild(header);
     sidebar.appendChild(content);
     sidebar.appendChild(footer);
+    
+    // 初始化按钮位置
+    setTimeout(function() {
+      closeButton.style.right = '330px';
+    }, 100);
     
     // 添加到页面
     document.body.appendChild(sidebar);
@@ -464,11 +481,16 @@ window.RedditSidebarTool.Sidebar = (function() {
       zjmButton.style.minWidth = '30px';
       zjmButton.style.textAlign = 'center';
       zjmButton.style.fontWeight = 'bold';
+      zjmButton.style.position = 'relative';
+      zjmButton.style.zIndex = '10000';
       
-      // 添加点击事件监听器
-      zjmButton.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
+      // 添加点击事件监听器 - 使用更强大的事件绑定
+      zjmButton.onclick = function(e) {
+        // 阻止事件传播
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (e && e.preventDefault) e.preventDefault();
+        e.cancelBubble = true;
+        e.returnValue = false;
         
         // 提取评论内容
         const commentContent = DomExtractor.extractCommentContent(comment);
@@ -493,7 +515,7 @@ window.RedditSidebarTool.Sidebar = (function() {
             ApiService.translateAndExplainContent(commentContent, commentTranslationElement);
           }
         }
-      });
+      };
       
       // 创建回复建议按钮
       const suggestButton = document.createElement('button');
@@ -506,11 +528,16 @@ window.RedditSidebarTool.Sidebar = (function() {
       suggestButton.style.minWidth = '110px';
       suggestButton.style.textAlign = 'center';
       suggestButton.style.fontWeight = 'bold';
+      suggestButton.style.position = 'relative';
+      suggestButton.style.zIndex = '10000';
       
-      // 为回复建议添加点击事件监听器
-      suggestButton.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
+      // 为回复建议添加点击事件监听器 - 使用更强大的事件绑定
+      suggestButton.onclick = function(e) {
+        // 阻止事件传播
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (e && e.preventDefault) e.preventDefault();
+        e.cancelBubble = true;
+        e.returnValue = false;
         
         // 获取原始帖子内容
         const { title, content } = DomExtractor.extractPostContent();
@@ -538,15 +565,30 @@ window.RedditSidebarTool.Sidebar = (function() {
           // 生成回复建议
           ApiService.generateReplySuggestion(originalPost, commentContent, subreddit, comment, additionalReqs);
         });
-      });
+      };
       
-      // 插入按钮
-      if (insertTarget.firstChild) {
-        insertTarget.insertBefore(suggestButton, insertTarget.firstChild);
-        insertTarget.insertBefore(zjmButton, insertTarget.firstChild);
-      } else {
-        insertTarget.appendChild(zjmButton);
-        insertTarget.appendChild(suggestButton);
+      // 插入按钮 - 使用更安全的插入方式
+      try {
+        // 创建一个包含两个按钮的容器
+        const buttonContainer = document.createElement('span');
+        buttonContainer.className = 'reddit-sidebar-tool-buttons';
+        buttonContainer.style.display = 'inline-block';
+        buttonContainer.style.position = 'relative';
+        buttonContainer.style.zIndex = '9999';
+        buttonContainer.style.marginRight = '5px';
+        
+        // 将按钮添加到容器
+        buttonContainer.appendChild(zjmButton);
+        buttonContainer.appendChild(suggestButton);
+        
+        // 将容器插入到目标位置
+        if (insertTarget.firstChild) {
+          insertTarget.insertBefore(buttonContainer, insertTarget.firstChild);
+        } else {
+          insertTarget.appendChild(buttonContainer);
+        }
+      } catch (error) {
+        Utils.log('插入按钮时出错:', error, 'error');
       }
     });
   }

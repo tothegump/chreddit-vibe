@@ -56,15 +56,25 @@
 
 /* 关闭按钮 */
 .sidebar-close-button {
-  position: absolute;
+  position: fixed;
   top: 10px;
-  left: 10px;
-  background-color: transparent;
+  right: 330px;
+  background-color: #ff4500;
   border: none;
   color: white;
   font-size: 24px;
   cursor: pointer;
-  z-index: 10000;
+  z-index: 10001;
+  width: 30px;
+  height: 30px;
+  line-height: 26px;
+  text-align: center;
+  border-radius: 50%;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+  transition: right 0.3s ease, background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 工具区块 */
