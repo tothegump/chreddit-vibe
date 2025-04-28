@@ -78,13 +78,13 @@ window.RedditSidebarTool.Sidebar = (function() {
           <div class="tool-section">
             <h4>评论内容</h4>
             <div class="comment-content-container">
-              <p id="comment-content">点击评论上的「zjm」按钮查看内容</p>
+              <p id="comment-content">点击评论上的「Extract」按钮查看内容</p>
             </div>
           </div>
           <div class="tool-section comment-translation-section" id="comment-translation-section" style="display: none;">
             <h4>评论翻译</h4>
             <div class="comment-translation-container">
-              <p id="comment-translation-content">点击评论上的「zjm」按钮查看翻译</p>
+              <p id="comment-translation-content">点击评论上的「Extract」按钮查看翻译</p>
             </div>
           </div>
           <div class="tool-section">
@@ -374,7 +374,7 @@ window.RedditSidebarTool.Sidebar = (function() {
       });
     }
     
-    // 短暂延迟后向评论添加 zjm 按钮
+    // 短暂延迟后向评论添加提取按钮
     setTimeout(addZjmButtonsToComments, 1000);
     
     // 延迟后重试，处理动态加载的内容
@@ -435,17 +435,17 @@ window.RedditSidebarTool.Sidebar = (function() {
   }
   
   /**
-   * 向评论添加 zjm 按钮
+   * 向评论添加提取按钮
    */
   function addZjmButtonsToComments() {
     if (!Utils.isPostDetailPage()) return;
     
-    Utils.log('向评论添加 zjm 按钮...');
+    Utils.log('向评论添加提取按钮...');
     
     // 查找评论
     const comments = DomExtractor.findComments();
     
-    // 向每个评论添加 zjm 按钮
+    // 向每个评论添加提取按钮
     comments.forEach((comment, index) => {
       // 检查按钮是否已存在
       if (comment.querySelector('.extract-button')) return;

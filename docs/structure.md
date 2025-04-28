@@ -94,7 +94,7 @@ redder-tool/
 - `createSidebar()`: 创建并注入侧边栏
 - `updatePostDetailData()`: 更新帖子详情数据
 - `setupListingPageInteractions()`: 设置列表页交互
-- `addZjmButtonsToComments()`: 向评论添加 zjm 按钮
+- `addZjmButtonsToComments()`: 向评论添加提取按钮
 - `handleUrlChange()`: 处理 URL 变化
 
 ### js/content/main.js
@@ -123,13 +123,13 @@ redder-tool/
    - 添加回复建议按钮和翻译按钮的事件监听器
    - 提取并显示 subreddit 名称
    - 加载保存的设置到表单字段
-   - 向评论添加 zjm 按钮
+   - 向评论添加提取按钮
    - 延迟后重试内容提取，处理动态加载的内容
    - 更新分析数据（评论数、投票比例）
 
 4. **评论互动**：
-   - 向每个评论添加 zjm 按钮和回复建议按钮
-   - zjm 按钮点击时，提取评论内容并更新侧边栏
+   - 向每个评论添加提取按钮和回复建议按钮
+   - 提取按钮点击时，提取评论内容并更新侧边栏
    - 回复建议按钮点击时，生成回复建议
 
 5. **API 调用**：
