@@ -94,7 +94,7 @@ redder-tool/
 - `createSidebar()`: 创建并注入侧边栏
 - `updatePostDetailData()`: 更新帖子详情数据
 - `setupListingPageInteractions()`: 设置列表页交互
-- `addZjmButtonsToComments()`: 向评论添加提取按钮
+- `addExtractButtonsToComments()`: 向评论添加提取按钮
 - `handleUrlChange()`: 处理 URL 变化
 
 ### js/content/main.js

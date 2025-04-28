@@ -375,7 +375,7 @@ window.RedditSidebarTool.Sidebar = (function() {
     }
     
     // 短暂延迟后向评论添加提取按钮
-    setTimeout(addZjmButtonsToComments, 1000);
+    setTimeout(addExtractButtonsToComments, 1000);
     
     // 延迟后重试，处理动态加载的内容
     setTimeout(() => {
@@ -437,7 +437,7 @@ window.RedditSidebarTool.Sidebar = (function() {
   /**
    * 向评论添加提取按钮
    */
-  function addZjmButtonsToComments() {
+  function addExtractButtonsToComments() {
     if (!Utils.isPostDetailPage()) return;
     
     Utils.log('向评论添加提取按钮...');
@@ -611,7 +611,7 @@ window.RedditSidebarTool.Sidebar = (function() {
   return {
     createSidebar: createSidebar,
     updatePostDetailData: updatePostDetailData,
-    addZjmButtonsToComments: addZjmButtonsToComments,
+    addExtractButtonsToComments: addExtractButtonsToComments,
     handleUrlChange: handleUrlChange
   };
 })();

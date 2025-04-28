@@ -69,7 +69,7 @@
         });
         
         if (shouldAddButtons) {
-          Sidebar.addZjmButtonsToComments();
+          Sidebar.addExtractButtonsToComments();
         }
       }
     });
