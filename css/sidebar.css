@@ -254,8 +254,8 @@
   gap: 5px;
 }
 
-/* ZJM 按钮样式 */
-.zjm-button {
+/* 提取按钮样式 */
+.extract-button {
   padding: 2px 6px;
   background-color: #ff4500;
   color: white;

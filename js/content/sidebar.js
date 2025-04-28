@@ -448,7 +448,7 @@ window.RedditSidebarTool.Sidebar = (function() {
     // 向每个评论添加 zjm 按钮
     comments.forEach((comment, index) => {
       // 检查按钮是否已存在
-      if (comment.querySelector('.zjm-button')) return;
+      if (comment.querySelector('.extract-button')) return;
       
       // 查找插入按钮的好位置
       let insertTarget = null;
@@ -470,22 +470,22 @@ window.RedditSidebarTool.Sidebar = (function() {
       
       if (!insertTarget) return;
       
-      // 创建 zjm 按钮
-      const zjmButton = document.createElement('button');
-      zjmButton.className = 'zjm-button';
-      zjmButton.textContent = 'zjm';
-      zjmButton.dataset.commentIndex = index;
+      // 创建提取按钮
+      const extractButton = document.createElement('button');
+      extractButton.className = 'extract-button';
+      extractButton.textContent = 'Extract';
+      extractButton.dataset.commentIndex = index;
       
       // 确保文本内容可见
-      zjmButton.style.display = 'inline-block';
-      zjmButton.style.minWidth = '30px';
-      zjmButton.style.textAlign = 'center';
-      zjmButton.style.fontWeight = 'bold';
-      zjmButton.style.position = 'relative';
-      zjmButton.style.zIndex = '10000';
+      extractButton.style.display = 'inline-block';
+      extractButton.style.minWidth = '50px';
+      extractButton.style.textAlign = 'center';
+      extractButton.style.fontWeight = 'bold';
+      extractButton.style.position = 'relative';
+      extractButton.style.zIndex = '10000';
       
       // 添加点击事件监听器 - 使用更强大的事件绑定
-      zjmButton.onclick = function(e) {
+      extractButton.onclick = function(e) {
         // 阻止事件传播
         if (e && e.stopPropagation) e.stopPropagation();
         if (e && e.preventDefault) e.preventDefault();
@@ -578,7 +578,7 @@ window.RedditSidebarTool.Sidebar = (function() {
         buttonContainer.style.marginRight = '5px';
         
         // 将按钮添加到容器
-        buttonContainer.appendChild(zjmButton);
+        buttonContainer.appendChild(extractButton);
         buttonContainer.appendChild(suggestButton);
         
         // 将容器插入到目标位置
