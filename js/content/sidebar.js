@@ -163,6 +163,16 @@ window.RedditSidebarTool.Sidebar = (function() {
     
     closeButton.addEventListener('click', function() {
       sidebar.classList.toggle('collapsed');
+      
+      // 存储侧边栏状态
+      const isCollapsed = sidebar.classList.contains('collapsed');
+      if (isCollapsed) {
+        closeButton.textContent = '►'; // 右箭头，表示可以展开
+        closeButton.style.left = '-20px';
+      } else {
+        closeButton.textContent = '×'; // 乘号，表示可以关闭
+        closeButton.style.left = '10px';
+      }
     });
     
     // 组装侧边栏

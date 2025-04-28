@@ -19,7 +19,8 @@
 
 /* 侧边栏折叠状态 */
 #reddit-sidebar-tool.collapsed {
-  transform: translateX(300px);
+  transform: translateX(300px) !important;
+  right: -300px !important;
 }
 
 /* 侧边栏头部 */
